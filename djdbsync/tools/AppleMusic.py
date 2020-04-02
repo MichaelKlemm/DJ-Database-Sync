@@ -129,7 +129,7 @@ class AppleMusicDatabase(object):
         self.load()
         if export_target == "print":
             print("\n".join([ repr(i) for i in self.data.get("Tracks", {}).values() ]))
-        elif export_target.endswith(".csv"):
+        elif export_target.lower().endswith(".csv"):
             with open(export_target, 'w+') as f:
                 out = csv.DictWriter(f, AppleMusicDatabase.APPLE_MUSIC_DB_COLUMNS)
                 for track in self.data.get("Tracks", {}).values():

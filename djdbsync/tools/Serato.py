@@ -461,7 +461,10 @@ class SeratoConfig(object):
 
     @ActionRegistry.register_command("list-crates")
     def list_crates(self):
-        print(self.get_crates())
+        """
+        Lists all crates defined in `serato_dir`
+        """
+        print("\n".join(self.get_crates()))
 
     def parse_crate(self, name):
         return self.from_bin_file(name)
@@ -477,16 +480,16 @@ class SeratoConfig(object):
             if export_target == "print":
                 print(f"File:     {crate_file}")
                 print(crate)
-            elif export_target.endswith(".m3u"):
+            elif export_target.lower().endswith(".m3u"):
                 with PlaylistWriter(export_target) as playlist:
                     crate.visit(playlist)
 
     @ActionRegistry.register_command("export-serato")
-    def export_db(self, crate_file, export_target: str = "print"):
+    def export_db(self, export_target: str = "print"):
         db = self.parse_db()
         if export_target == "print":
             print(repr(db))
-        elif export_target.endswith(".m3u"):
+        elif export_target.lower().endswith(".m3u"):
             with PlaylistWriter(export_target) as playlist:
                 db.visit(playlist)
         elif export_target.endswith(".csv"):

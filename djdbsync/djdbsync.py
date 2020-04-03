@@ -65,7 +65,7 @@ class DjMediaSyncController(object):
             # version="0.0.1-beta",
             # usage="Benutzung",
             formatter_class=ArgumentMultilineHelpFormatter,
-            description=f'ML|{__doc__}',
+            description=__doc__,
             epilog="test...",
             add_help=False,
         )
@@ -85,8 +85,7 @@ class DjMediaSyncController(object):
         #                                    description="The following commands are available")
         cmds = self.argparse.add_mutually_exclusive_group()
         for command, description in ActionRegistry.get_commands_desc().items():
-            helptext, desc = description
-            # parser = cmds.add_parser(name=command, help=f'ML|{help}\n\n{desc}')
+            helptext, _ = description
             cmds.add_argument('commands',
                               metavar=command,
                               # dest='commands',
@@ -225,11 +224,3 @@ class DjMediaSyncController(object):
         except Exception as e:
             print("Error while launching application")
             print(repr(e))
-
-
-def main():
-    DjMediaSyncController.launch()
-
-
-if __name__ == '__main__':
-    main()

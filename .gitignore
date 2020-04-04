@@ -4,3 +4,6 @@ __pycache__/
 venv
 *.iml
 examples/
+.tox/
+*.egg-info/
+out/

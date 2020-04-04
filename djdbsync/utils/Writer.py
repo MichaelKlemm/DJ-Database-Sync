@@ -1,19 +1,4 @@
-from abc import abstractmethod
 import csv
-
-
-class Visitor(object):
-
-    @abstractmethod
-    def accept(self, obj):
-        pass
-
-
-class Visitable(object):
-
-    @abstractmethod
-    def visit(self, obj: Visitor):
-        pass
 
 
 class FixedExcel(csv.Dialect):

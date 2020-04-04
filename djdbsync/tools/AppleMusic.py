@@ -7,7 +7,6 @@ from djdbsync.utils.ActionRegistry import ActionRegistry
 
 
 class AppleMusicDatabase(object):
-
     APPLE_MUSIC_DB_HEADERS = [
         "Major Version",
         "Minor Version",
@@ -88,10 +87,10 @@ class AppleMusicDatabase(object):
 
     @RaiseOnDataNotLoaded
     def get_db_header(self) -> Dict[str, object]:
-        return { key: self.data[key] for key in self.data if key in AppleMusicDatabase.APPLE_MUSIC_DB_HEADERS }
+        return {key: self.data[key] for key in self.data if key in AppleMusicDatabase.APPLE_MUSIC_DB_HEADERS}
 
     @RaiseOnDataNotLoaded
-    def get_db_tracks(self) -> Dict[str, object]:
+    def get_db_tracks(self) -> Dict[str, Dict[str, object]]:
         return self.data.get("Tracks", {})
 
     @RaiseOnDataNotLoaded
@@ -100,7 +99,7 @@ class AppleMusicDatabase(object):
 
     def __repr__(self):
         hdr = self.get_db_header()
-        return "Database for folder {} based on date {} (APP-Version {} / DB-Version: {} / {} Tracks / {} Playlists)".format(
+        return "Database {} (Date {} / APP-Version {} / DB-Version: {} / {} Tracks / {} Playlists)".format(
             hdr.get("Music Folder", "unknown"),
             hdr.get("Date", "unknown"),
             hdr.get("Application Version", "unknows"),
@@ -108,10 +107,6 @@ class AppleMusicDatabase(object):
             len(self.get_db_tracks()),
             len(self.get_db_playlists()),
         )
-
-    @staticmethod
-    def get_sys_path(file_url: str) -> str:
-        return ""
 
     def get_db_track_locations(self) -> Dict[int, str]:
         return {
@@ -121,14 +116,13 @@ class AppleMusicDatabase(object):
         }
 
     def get_all_playlists(self):
-        return { i["Name"]: list(j["Track ID"] for j in i["Playlist Items"]) for i in self.get_all_playlists() }
-
+        return {i["Name"]: list(j["Track ID"] for j in i["Playlist Items"]) for i in self.get_all_playlists()}
 
     @ActionRegistry.register_command('export-itunes')
-    def export_database(self, output_directory: str, export_target: str = "print"): #"apple-db.csv"):
+    def export_database(self, output_directory: str, export_target: str = "print"):  # "apple-db.csv"):
         self.load()
         if export_target == "print":
-            print("\n".join([ repr(i) for i in self.data.get("Tracks", {}).values() ]))
+            print("\n".join([repr(i) for i in self.data.get("Tracks", {}).values()]))
         elif export_target.lower().endswith(".csv"):
             with open(export_target, 'w+') as f:
                 out = csv.DictWriter(f, AppleMusicDatabase.APPLE_MUSIC_DB_COLUMNS)
@@ -161,4 +155,3 @@ class AppleMusicDatabase(object):
             if (artist_match * title_match) > (accuracy * accuracy):
                 results.append(id)
         return results
-

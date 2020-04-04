@@ -4,7 +4,6 @@ from typing import Dict, List, Tuple, Callable, Iterable
 
 
 class ActionRegistry(object):
-
     class Singleton(object):
 
         __INSTANCE__: object = None
@@ -13,7 +12,7 @@ class ActionRegistry(object):
             self.func = func
 
         @classmethod
-        def get_instance(cls) -> object:
+        def get_instance(cls) -> 'ActionRegistry':
             if not cls.__INSTANCE__:
                 cls.__INSTANCE__ = ActionRegistry()
             return cls.__INSTANCE__
@@ -43,31 +42,20 @@ class ActionRegistry(object):
         return False
 
     @staticmethod
-    def _parse_docstring(docstring: str) -> Tuple[str, str]:
-        parts =  docstring.split('\n\n')
-        parts = [ re.sub('\s+',' ', i) for i in parts ]
-        if len(parts) == 0:
-            return "", ""
-        if len(parts) == 1:
-            return parts[0], ""
-        if len(parts) >= 2:
-            return parts[0], parts[1]
-
-    @staticmethod
     def register_command(name: str = None):
-        def register_command_impl(self, func, name = name):
-            if not name:
-                name = func.__name__
-            if name in self.description:
-                raise FileExistsError(f"Command {name} already registered")
-            self.description[name] = ActionRegistry._parse_docstring(func.__doc__) if func.__doc__ else (None, None)
+        def register_command_impl(self, func, i=name):
+            if not i:
+                 i = func.__name__
+            if i in self.description:
+                raise FileExistsError(f"Command {i} already registered")
+            self.description[i] = _parse_docstring(func.__doc__) if func.__doc__ else (None, None)
             if ActionRegistry._is_methodreference(func):
                 cls_id = ActionRegistry._get_object_identifier(func)
                 if cls_id not in self.unbound_methods:
                     self.unbound_methods[cls_id] = {}
-                self.unbound_methods[cls_id][name] = func
+                self.unbound_methods[cls_id][i] = func
             else:
-                self.actions[name].append(func)
+                self.actions[i].append(func)
 
             def _wrapper():
                 raise NotImplementedError("Method not callable directly! This method is used as action only!")
@@ -75,16 +63,17 @@ class ActionRegistry(object):
             return _wrapper
 
         instance = ActionRegistry.Singleton.get_instance()
-        return register_command_impl.__get__(instance)
+        return register_command_impl.__get__(instance, instance.__class__)
 
     @Singleton
     def register_object(self, obj: object):
         name = ActionRegistry._get_object_identifier(obj)
         for action_name, unbound_method in self.unbound_methods.get(name, {}).items():
-            if action_name in self.actions:
-                self.actions[action_name].append(unbound_method.__get__(obj))
-            else:
-                self.actions[action_name] = [unbound_method.__get__(obj)]
+            if hasattr(unbound_method, '__get__'):
+                if action_name in self.actions:
+                    self.actions[action_name].append(unbound_method.__get__(obj, obj.__class__))
+                else:
+                    self.actions[action_name] = [unbound_method.__get__(obj, obj.__class__)]
 
     @Singleton
     def get_commands_desc(self) -> Dict['str', Tuple[str, str]]:
@@ -113,3 +102,14 @@ class ActionRegistry(object):
                 print("While running the action '{}' the following error occurred:".format(name))
                 print(repr(e))
                 print("The action is represented by function/method '{}'".format(action.__qualname__))
+
+
+def _parse_docstring(docstring: str) -> Tuple[str, str]:
+    parts = docstring.split("\n\n")
+    parts = [re.sub(r"\s+", " ", i) for i in parts]
+    if len(parts) == 0:
+        return "", ""
+    if len(parts) == 1:
+        return parts[0], ""
+    if len(parts) >= 2:
+        return parts[0], parts[1]

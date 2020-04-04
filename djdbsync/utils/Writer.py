@@ -1,8 +1,6 @@
 from abc import abstractmethod
 import csv
 
-#from djdbsync.tools.Serato import SeratoCrateTrackInfo
-
 
 class Visitor(object):
 

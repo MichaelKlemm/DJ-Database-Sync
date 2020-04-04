@@ -37,6 +37,7 @@ class ArgumentMultilineHelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
             return textwrap.wrap(text,
                                  width,
                                  replace_whitespace=False)
+        # pylint: disable=protected-access
         return super()._split_lines(text, width)
 
     def _fill_text(self, text, width, indent):

@@ -15,6 +15,10 @@ TODO
  * Export your Crates (including the Media-Files) to share them between your Colleagues and Friends
  * Export/Import your Database/Crates to/from CSV to do some more analysis and magic operations using some spreadsheet tools (e.g. Excel)
 
+## Status, Releases and Download
+
+[![Build Status](https://travis-ci.org/MichaelKlemm/DJ-Database-Sync.svg?branch=master)](https://travis-ci.org/MichaelKlemm/DJ-Database-Sync)
+
 ## Installation
 
 TODO

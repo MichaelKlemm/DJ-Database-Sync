@@ -9,18 +9,17 @@ Prominent examples:
 """
 import os
 import argparse
-
-from djdbsync.tools.Serato import SeratoConfig, SeratoSongStorageFs
-from djdbsync.tools.AppleMusic import AppleMusicDatabase
-from djdbsync.utils.ActionRegistry import ActionRegistry
-
+import textwrap
 import logging
+
+from djdbsync.tools.serato import SeratoConfig, SeratoSongStorageFs
+from djdbsync.tools.apple_music import AppleMusicDatabase
+from djdbsync.utils.actions import ActionRegistry
+
 
 log = logging.getLogger(__name__)
 
-HAVE_GUI = False
-
-
+# HAVE_GUI = False
 # try:
 #     from kivy.app import App
 #     from kivy.uix.label import Label
@@ -33,15 +32,13 @@ class ArgumentMultilineHelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
     def _split_lines(self, text, width):
         if text.startswith('ML|'):
             text = text[3:]
-            import textwrap
             return textwrap.wrap(text,
                                  width,
                                  replace_whitespace=False)
         # pylint: disable=protected-access
-        return super()._split_lines(text, width)
+        return super(ArgumentMultilineHelpFormatter, self)._split_lines(text, width)
 
     def _fill_text(self, text, width, indent):
-        import textwrap
         return textwrap.fill(text,
                              width,
                              replace_whitespace=False,
@@ -58,7 +55,7 @@ class ArgumentMultilineHelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
 #             return Label(text='Hello world')
 
 
-class DjMediaSyncController(object):
+class DjMediaSyncController:
 
     def __init__(self):
         self.argparse = argparse.ArgumentParser(
@@ -73,7 +70,7 @@ class DjMediaSyncController(object):
         self.init_option_parser_groups()
         self.serato_parser = None
         self.apple_database = None
-        ActionRegistry.register_object(self)
+        ActionRegistry().register_object(self)
 
     def init_option_parser_groups(self):
         self.init_commands()
@@ -85,7 +82,7 @@ class DjMediaSyncController(object):
         # cmds = self.argparse.add_subparsers(title="Commands",
         #                                    description="The following commands are available")
         cmds = self.argparse.add_mutually_exclusive_group()
-        for command, description in ActionRegistry.get_commands_desc().items():
+        for command, description in ActionRegistry().get_commands_desc().items():
             helptext, _ = description
             cmds.add_argument('commands',
                               metavar=command,
@@ -174,14 +171,13 @@ class DjMediaSyncController(object):
             help="")
 
     @ActionRegistry.register_command(name='create-itunes-links')
-    def create_sym_links(self, apple_database_file: str, serato_media_dir: str, update_existing: bool, dry_run: bool):
+    def create_sym_links(self, serato_media_dir: str, update_existing: bool, dry_run: bool):
         """
         Create links named by the Song-ID in the iTunes DB to the real file
 
         By reading the iTunes / AppleMusic database (set by `apple_database_file`) the program will create a linked file
         in the directory `serato_media_dir`
 
-        :param apple_database_file:
         :param serato_media_dir:
         :param update_existing:
         :param dry_run:
@@ -200,28 +196,29 @@ class DjMediaSyncController(object):
 
         if "serato_directory" in options and options["serato_directory"]:
             self.serato_parser = SeratoConfig(options["serato_directory"])
-            ActionRegistry.register_object(self.serato_parser)
+            ActionRegistry().register_object(self.serato_parser)
 
         if "apple_database_file" in options and options["apple_database_file"]:
             self.apple_database = AppleMusicDatabase(options["apple_database_file"])
-            ActionRegistry.register_object(self.apple_database)
+            ActionRegistry().register_object(self.apple_database)
 
         for action in commands:  # options.get("commands", []):
-            action_params, num_optional = ActionRegistry.get_action_args(action)
+            action_params, num_optional = ActionRegistry().get_action_args(action)
             num_required = len(action_params) - num_optional
             params = {}
-            for i in range(len(action_params)):
+            for i in enumerate(action_params):
                 if action_params[i] not in options:
                     if i < num_required:
                         raise Exception("Argument '{}' missing for action {}".format(action_params[i], action))
                     continue
                 params[action_params[i]] = options[action_params[i]]
-            ActionRegistry.do_action(action, **params)
+            ActionRegistry().do_action(action, **params)
 
     @staticmethod
     def launch():
         try:
             DjMediaSyncController().__launch__()
-        except Exception as e:
+        # pylint: disable=broad-except
+        except Exception as err:
             print("Error while launching application")
-            print(repr(e))
+            print(repr(err))

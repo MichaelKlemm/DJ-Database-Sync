@@ -4,28 +4,27 @@ import struct
 from abc import abstractmethod
 from typing import Tuple, List, Iterable
 
-from djdbsync.utils.ActionRegistry import ActionRegistry
-from djdbsync.utils.Writer import Visitable, Visitor, PlaylistWriter, DatabaseCsvWriter
+from djdbsync.utils.actions import ActionRegistry
+from djdbsync.utils.writer import Visitable, Visitor, PlaylistWriter, DatabaseCsvWriter
 
 
 class SeratoSyncError(Exception):
     pass
 
 
-class SeratoSyncError_SongIdAlreadyExists(SeratoSyncError):
+class SongIdAlreadyExistsError(SeratoSyncError):
     pass
 
 
-class SeratoSyncError_SongIdChanged(SeratoSyncError):
+class SongIdChangedError(SeratoSyncError):
     pass
 
 
-class SeratoSyncError_SongIdUnknows(SeratoSyncError):
+class SongIdUnknownError(SeratoSyncError):
     pass
 
 
-class SeratoSongStorageFs(object):
-
+class SeratoSongStorageFs:
     SSL_STORE_DIR_MOD = 0o755
 
     def __init__(self, root, dry_run: bool = False):
@@ -37,21 +36,21 @@ class SeratoSongStorageFs(object):
             pass
         else:
             print("Created new storage directory for Serato media files at {}".format(self.root))
-        self.db = { os.path.splitext(i)[0]: i for i in os.listdir(self.root) }
+        self.serato_db = {os.path.splitext(i)[0]: i for i in os.listdir(self.root)}
 
-    def add_song(self, id: int, path: str, update_existing: bool = False) -> str:
+    def add_song(self, song_id: int, path: str, update_existing: bool = False) -> str:
         path = os.path.normpath(path)
-        filename = str(id) + os.path.splitext(path)[1]
+        filename = str(song_id) + os.path.splitext(path)[1]
         filepath = os.path.join(self.root, filename)
-        if id in self.db:
-            if self.db[id] != filename:
-                raise SeratoSyncError_SongIdAlreadyExists()
+        if song_id in self.serato_db:
+            if self.serato_db[song_id] != filename:
+                raise SongIdAlreadyExistsError()
             old_path = os.readlink(filepath)
             if path == old_path:
                 return filepath
             if not update_existing:
-                raise SeratoSyncError_SongIdChanged()
-            print("Path of Song-ID {} has changed from {} to {}".format(id, old_path, path))
+                raise SongIdChangedError()
+            print("Path of Song-ID {} has changed from {} to {}".format(song_id, old_path, path))
             if not self.dry_run:
                 os.remove(filepath)
 
@@ -59,16 +58,15 @@ class SeratoSongStorageFs(object):
             print("Creating symlink from {} to {}".format(path, filepath))
         else:
             os.symlink(path, filepath)
-        self.db[id] = filepath
+        self.serato_db[song_id] = filepath
 
-    def get_file(self, id):
-        if id in self.db:
-            return self.db[id]
-        raise SeratoSyncError_SongIdUnknows()
+    def get_file(self, song_id):
+        if song_id in self.serato_db:
+            return self.serato_db[song_id]
+        raise SongIdUnknownError()
 
 
-class SeratoBinFile(object):
-
+class SeratoBinFile:
     SSL_OBJ_HDR_ENCODING = 'utf-8'
     SSL_OBJ_STR_ENCODING = 'utf-16be'
 
@@ -96,6 +94,7 @@ class SeratoBinFile(object):
 
     def read_object_header(self) -> Tuple[str, int, callable]:
         pos = self.ssldb.tell()
+
         def _reset():
             self.ssldb.seek(pos)
 
@@ -139,7 +138,7 @@ class SeratoStringParam(SeratoObject):
 
     @classmethod
     def create_from_bin(cls, data: SeratoBinFile, length: int) -> SeratoObject:
-        name, length, reset = data.read_object_header()
+        name, length, _ = data.read_object_header()
         return cls(name, data.read_string(length))
 
 
@@ -161,7 +160,7 @@ class SeratoCrateSortInfo(SeratoObject):
         sort_brev = None
 
         while data.get_pos() < expected_end:
-            name, length, reset = data.read_object_header()
+            name, length, _ = data.read_object_header()
             if name == "tvcn":
                 sort_column = data.read_string(length)
             elif name == "brev":
@@ -190,7 +189,7 @@ class SeratoCrateColumnInfo(SeratoObject):
         column_width = None
 
         while data.get_pos() < expected_end:
-            name, length, reset = data.read_object_header()
+            name, length, _ = data.read_object_header()
             if name == "tvcn":
                 column_name = data.read_string(length)
             elif name == "tvcw":
@@ -203,7 +202,7 @@ class SeratoCrateColumnInfo(SeratoObject):
 
 class SeratoCrateTrackInfo(SeratoObject):
 
-    def __init__(self, path: str, *args, **kwargs):
+    def __init__(self, path: str, **kwargs):
         self.data = kwargs
         self.path = path
         super().__init__("Track", "")
@@ -215,11 +214,9 @@ class SeratoCrateTrackInfo(SeratoObject):
     def create_from_bin(cls, data: SeratoBinFile, length: int) -> SeratoObject:
         expected_end = data.get_pos() + length
 
-        path = None
-
         key_convert_tbl = {
-            "ptrk": ("s", "path"), # Crate v1.0
-            "pfil": ("s", "path"), # DB v2.0
+            "ptrk": ("s", "path"),  # Crate v1.0
+            "pfil": ("s", "path"),  # DB v2.0
             "ttyp": ("s", "filetype"),
             "tsng": ("s", "title"),
             "tart": ("s", "artist"),
@@ -264,19 +261,16 @@ class SeratoCrateTrackInfo(SeratoObject):
         values = {}
 
         while data.get_pos() < expected_end:
-            name, length, reset = data.read_object_header()
-            #if name == "ptrk":
-            #    # TODO: Remove hard coded leading slash / this will not working on non UNIX machines
-            #    path = "/" + data.read_string(length)
-            type, lbl = key_convert_tbl.get(name, (None, None))
-            if type == "s":
-                values[lbl] = data.read_string(length)
-            elif type == "u32" and length == 4:
-                values[lbl] = data.read_uint32()
-            elif type == "u16" and length == 2:
-                values[lbl] = data.read_uint16()
-            elif type == "u8"  and length == 1:
-                values[lbl] = data.read_uint8()
+            name, length, _ = data.read_object_header()
+            value_type, value_lbl = key_convert_tbl.get(name, (None, None))
+            if value_type == "s":
+                values[value_lbl] = data.read_string(length)
+            elif value_type == "u32" and length == 4:
+                values[value_lbl] = data.read_uint32()
+            elif value_type == "u16" and length == 2:
+                values[value_lbl] = data.read_uint16()
+            elif value_type == "u8" and length == 1:
+                values[value_lbl] = data.read_uint8()
             else:
                 raise IndexError("Unknown type '{}' with size {} at position {} while parsing Serato SSL file".format(
                     name, length, data.get_pos()))
@@ -330,8 +324,8 @@ class SeratoSslCrate(SeratorFile):
             "otrk": SeratoCrateTrackInfo,
         }
 
-        while(data.is_byte_left()):
-            name, length, reset = data.read_object_header()
+        while data.is_byte_left():
+            name, length, _ = data.read_object_header()
             obj_cls = recognized_objects.get(name, None)
             if not obj_cls:
                 raise IndexError("Unknown type '{}' with size {} at position {} while parsing Serato SSL file".format(
@@ -371,8 +365,8 @@ class SeratoSslDatabase(SeratorFile):
             "otrk": SeratoCrateTrackInfo,
         }
 
-        while(data.is_byte_left()):
-            name, length, reset = data.read_object_header()
+        while data.is_byte_left():
+            name, length, _ = data.read_object_header()
             obj_cls = recognized_objects.get(name, None)
             if not obj_cls:
                 raise IndexError("Unknown type '{}' with size {} at position {} while parsing Serato SSL file".format(
@@ -382,8 +376,7 @@ class SeratoSslDatabase(SeratorFile):
         return self
 
 
-class SeratoFileHeader(SeratorFile):
-    # TODO: Do we need this additional object header or would the StringParam sufficient?
+class SeratoFileHeader(Visitable):
 
     IDENTIFIER = 'vrsn'
 
@@ -402,7 +395,7 @@ class SeratoFileHeader(SeratorFile):
         self.file_type = file_type
         self.content = None
 
-    def append_content(self, content: SeratorFile):
+    def set_file_content(self, content: SeratorFile):
         self.content = content
 
     def get_cls(self):
@@ -429,8 +422,7 @@ class SeratoFileHeader(SeratorFile):
         return cls(version, file_type)
 
 
-class SeratoConfig(object):
-
+class SeratoConfig:
     SERATO_DEFAULT_DB_FILE = "database V2"
     SERATO_DEFAULT_CRATE_DIR = "Subcrates"
 
@@ -446,7 +438,7 @@ class SeratoConfig(object):
         if not cls:
             raise NotImplementedError("File/protocol '{}' / version={} not implemented".format(
                 file_header.file_type, file_header.version))
-        file_header.append_content(cls.create_from_bin(reader))
+        file_header.set_file_content(cls.create_from_bin(reader))
         return file_header
 
     def parse_db(self):
@@ -454,7 +446,7 @@ class SeratoConfig(object):
 
     def _get_files_with_rel_path(self, subdir: str) -> List[str]:
         for _, _, files in os.walk(os.path.join(self.root_path, subdir)):
-            return [ os.path.join(subdir, i) for i in files ]
+            return [os.path.join(subdir, i) for i in files]
 
     def get_crates(self) -> Iterable[str]:
         return self._get_files_with_rel_path(SeratoConfig.SERATO_DEFAULT_CRATE_DIR)
@@ -486,15 +478,15 @@ class SeratoConfig(object):
 
     @ActionRegistry.register_command("export-serato")
     def export_db(self, export_target: str = "print"):
-        db = self.parse_db()
+        serato_db = self.parse_db()
         if export_target == "print":
-            print(repr(db))
+            print(repr(serato_db))
         elif export_target.lower().endswith(".m3u"):
             with PlaylistWriter(export_target) as playlist:
-                db.visit(playlist)
+                serato_db.visit(playlist)
         elif export_target.endswith(".csv"):
             with DatabaseCsvWriter(export_target) as csv:
-                db.visit(csv)
+                serato_db.visit(csv)
 
     def get_smart_crates(self) -> Iterable[str]:
         return []

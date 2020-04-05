@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="DJ-Database-Sync Unittests" type="tests" factoryName="Unittests">
+  <configuration default="false" name="DJ-Sync: Unittests" type="tests" factoryName="Unittests">
     <module name="DJ-Database-Sync" />
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />

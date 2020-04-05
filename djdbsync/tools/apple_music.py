@@ -3,10 +3,10 @@ import plistlib
 from typing import Dict, List
 from urllib.parse import unquote, urlparse
 
-from djdbsync.utils.ActionRegistry import ActionRegistry
+from djdbsync.utils.actions import ActionRegistry
 
 
-class AppleMusicDatabase(object):
+class AppleMusicDatabase:
     APPLE_MUSIC_DB_HEADERS = [
         "Major Version",
         "Minor Version",
@@ -65,15 +65,15 @@ class AppleMusicDatabase(object):
         "Work",
     ]
 
-    class RaiseOnDataNotLoaded(object):
+    class RaiseOnDataNotLoaded:
 
         def __init__(self, func: callable):
             self.func = func
 
-        def __call__(self, db: 'AppleMusicDatabase', *args, **kwargs):
-            if not db.data:
+        def __call__(self, obj: 'AppleMusicDatabase', *args, **kwargs):
+            if not obj.data:
                 raise LookupError("Apple DB requires to be loaded first. Use load()")
-            return self.func.__get__(db)(*args, **kwargs)
+            return self.func.__get__(obj)(*args, **kwargs)
 
     def __init__(self, dbfile: str):
         self.dbfile = dbfile
@@ -82,8 +82,8 @@ class AppleMusicDatabase(object):
     def load(self):
         if self.data:
             raise RuntimeError("Apple DB loaded twice")
-        with open(self.dbfile, 'r+b') as f:
-            self.data = plistlib.load(f)
+        with open(self.dbfile, 'r+b') as file:
+            self.data = plistlib.load(file)
 
     @RaiseOnDataNotLoaded
     def get_db_header(self) -> Dict[str, object]:
@@ -119,39 +119,39 @@ class AppleMusicDatabase(object):
         return {i["Name"]: list(j["Track ID"] for j in i["Playlist Items"]) for i in self.get_all_playlists()}
 
     @ActionRegistry.register_command('export-itunes')
-    def export_database(self, output_directory: str, export_target: str = "print"):  # "apple-db.csv"):
+    def export_database(self, export_target: str = "print"):  # "apple-db.csv"):
         self.load()
         if export_target == "print":
             print("\n".join([repr(i) for i in self.data.get("Tracks", {}).values()]))
         elif export_target.lower().endswith(".csv"):
-            with open(export_target, 'w+') as f:
-                out = csv.DictWriter(f, AppleMusicDatabase.APPLE_MUSIC_DB_COLUMNS)
+            with open(export_target, 'w+') as file:
+                out = csv.DictWriter(file, AppleMusicDatabase.APPLE_MUSIC_DB_COLUMNS)
                 for track in self.data.get("Tracks", {}).values():
                     out.writerow(track)
 
     @staticmethod
-    def _string_match(a: str, b: str) -> int:
-        if a == b:
+    def _string_match(str1: str, str2: str) -> int:
+        if str1 == str2:
             return 100
-        a = a.lower()
-        b = b.lower()
-        if a == b:
+        str1 = str1.lower()
+        str2 = str2.lower()
+        if str1 == str2:
             return 95
-        if a.startswith(b) or b.startswith(a):
+        if str1.startswith(str2) or str2.startswith(str1):
             return 90
-        words = a.split(' ')
+        words = str1.split(' ')
         result = 0
         for i in words:
-            if i in b:
+            if i in str2:
                 result += 1
         return result * (90 / len(words))
 
-    def find_track(self, artist: str, title: str, accuracy: int = 70) -> List[int]:
+    def find_track(self, artist: str, _title: str, accuracy: int = 70) -> List[int]:
         results = []
         self.load()
-        for id, track in self.data.get("Tracks", {}).items():
-            artist_match = AppleMusicDatabase._string_match(artist, track['Artist'])
-            title_match = AppleMusicDatabase._string_match(artist, track['Name'])
+        for track_id, track_info in self.data.get("Tracks", {}).items():
+            artist_match = AppleMusicDatabase._string_match(artist, track_info['Artist'])
+            title_match = AppleMusicDatabase._string_match(artist, track_info['Name'])
             if (artist_match * title_match) > (accuracy * accuracy):
-                results.append(id)
+                results.append(track_id)
         return results

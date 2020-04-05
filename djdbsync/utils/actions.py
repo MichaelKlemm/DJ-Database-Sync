@@ -1,24 +1,12 @@
 import inspect
 import re
+from types import MethodType
 from typing import Dict, List, Tuple, Callable, Iterable
 
+from djdbsync.utils.helper import SingletonMetaclass
 
-class ActionRegistry(object):
-    class Singleton(object):
 
-        __INSTANCE__: object = None
-
-        def __init__(self, func: callable):
-            self.func = func
-
-        @classmethod
-        def get_instance(cls) -> 'ActionRegistry':
-            if not cls.__INSTANCE__:
-                cls.__INSTANCE__ = ActionRegistry()
-            return cls.__INSTANCE__
-
-        def __call__(self, *args, **kwargs):
-            return self.func.__get__(self.__class__.get_instance())(*args, **kwargs)
+class ActionRegistry(metaclass=SingletonMetaclass):
 
     def __init__(self):
         self.actions: Dict[str, List[Callable]] = {}
@@ -26,7 +14,7 @@ class ActionRegistry(object):
         self.unbound_methods: Dict[str, Dict[str, Callable]] = {}
 
     @staticmethod
-    def _get_object_identifier(obj) -> str:
+    def _get_object_identifier(obj: Callable) -> str:
         if inspect.isfunction(obj):
             return obj.__qualname__.rsplit('.', 1)[0]
         return obj.__class__.__name__
@@ -42,30 +30,30 @@ class ActionRegistry(object):
         return False
 
     @staticmethod
-    def register_command(name: str = None):
-        def register_command_impl(self, func, i=name):
-            if not i:
-                 i = func.__name__
-            if i in self.description:
-                raise FileExistsError(f"Command {i} already registered")
-            self.description[i] = _parse_docstring(func.__doc__) if func.__doc__ else (None, None)
+    def register_command(name: str = None) -> MethodType:
+        def _register_command_impl(self: ActionRegistry, func: Callable, name_impl: str = name):
+            if not name_impl:
+                name_impl = func.__name__
+            if name_impl in self.description:
+                raise FileExistsError(f"Command {name_impl} already registered")
+            self.description[name_impl] = _parse_docstring(func.__doc__) if func.__doc__ else (None, None)
             if ActionRegistry._is_methodreference(func):
                 cls_id = ActionRegistry._get_object_identifier(func)
                 if cls_id not in self.unbound_methods:
                     self.unbound_methods[cls_id] = {}
-                self.unbound_methods[cls_id][i] = func
+                self.unbound_methods[cls_id][name_impl] = func
             else:
-                self.actions[i].append(func)
+                self.actions[name_impl].append(func)
 
             def _wrapper():
                 raise NotImplementedError("Method not callable directly! This method is used as action only!")
 
             return _wrapper
 
-        instance = ActionRegistry.Singleton.get_instance()
-        return register_command_impl.__get__(instance, instance.__class__)
+        # PyLint doesn't recognize that a method is created and returned
+        # pylint: disable=no-value-for-parameter
+        return _register_command_impl.__get__(ActionRegistry(), ActionRegistry)
 
-    @Singleton
     def register_object(self, obj: object):
         name = ActionRegistry._get_object_identifier(obj)
         for action_name, unbound_method in self.unbound_methods.get(name, {}).items():
@@ -75,15 +63,12 @@ class ActionRegistry(object):
                 else:
                     self.actions[action_name] = [unbound_method.__get__(obj, obj.__class__)]
 
-    @Singleton
     def get_commands_desc(self) -> Dict['str', Tuple[str, str]]:
         return self.description
 
-    @Singleton
     def get_actions(self) -> Iterable[str]:
         return self.actions.keys()
 
-    @Singleton
     def get_action_args(self, name) -> Tuple[List[str], int]:
         for action in self.actions.get(name, []):
             i = inspect.getfullargspec(action)
@@ -93,14 +78,14 @@ class ActionRegistry(object):
             return i.args, (len(i.defaults) if i.defaults else 0)
         return [], 0
 
-    @Singleton
     def do_action(self, name: str, *args, **kwargs):
         for action in self.actions.get(name, []):
             try:
                 action(*args, **kwargs)
-            except Exception as e:
+            # pylint: disable=broad-except
+            except Exception as err:
                 print("While running the action '{}' the following error occurred:".format(name))
-                print(repr(e))
+                print(repr(err))
                 print("The action is represented by function/method '{}'".format(action.__qualname__))
 
 

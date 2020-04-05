@@ -1,6 +1,7 @@
 import unittest
 
-from djdbsync.utils.Helper import Singleton
+from djdbsync.utils.helper import SingletonMetaclass
+
 
 class TestSingleton(unittest.TestCase):
 
@@ -14,8 +15,7 @@ class TestSingleton(unittest.TestCase):
         """
         A class using the singleton pattern can be initialized
         """
-        @Singleton
-        class Test(object):
+        class Test(metaclass=SingletonMetaclass):
             def __init__(self, a):
                 self.data = a
 
@@ -27,8 +27,7 @@ class TestSingleton(unittest.TestCase):
         """
         Instantiate a class twice will create two equal references to one object.
         """
-        @Singleton
-        class Test(object):
+        class Test(metaclass=SingletonMetaclass):
             def __init__(self):
                 self.data = None
 
@@ -40,8 +39,7 @@ class TestSingleton(unittest.TestCase):
         """
         Data stored by object using the singleton will not be overwritten by a second instantiation
         """
-        @Singleton
-        class Test(object):
+        class Test(metaclass=SingletonMetaclass):
             def __init__(self, data):
                 self.data = data
 
@@ -54,13 +52,11 @@ class TestSingleton(unittest.TestCase):
         """
         The singleton decorator can be used by different classes, each creating there own unique instance
         """
-        @Singleton
-        class Test1(object):
+        class Test1(metaclass=SingletonMetaclass):
             def __init__(self, data):
                 self.data = data
 
-        @Singleton
-        class Test2(object):
+        class Test2(metaclass=SingletonMetaclass):
             def __init__(self, data):
                 self.data = data
 
@@ -68,6 +64,39 @@ class TestSingleton(unittest.TestCase):
         obj2 = Test2("Also expected")
         assert obj1.data == "Expected"
         assert obj2.data == "Also expected"
+
+    def test_callMethod(self):
+        """
+        A object method can be called
+        """
+        class Test(metaclass=SingletonMetaclass):
+            def __init__(self, a, *args, **kwargs):
+                self.data = a
+            def get_data(self):
+                return self.data
+
+        obj = Test("It works")
+        assert obj
+        assert obj.data == "It works"
+        assert obj.get_data() == "It works"
+        assert Test("").get_data() == "It works"
+
+    def test_callStaticAndClassMethod(self):
+        """
+        Class can have static and class methods
+        """
+        class Test(metaclass=SingletonMetaclass):
+            def __init__(self, a):
+                assert False
+            @staticmethod
+            def static_method():
+                return "static"
+            @classmethod
+            def class_method(cls):
+                return "class"
+
+        assert Test.static_method() == "static"
+        assert Test.class_method() == "class"
 
 
 if __name__ == '__main__':

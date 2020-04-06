@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="djdbsync Help" type="PythonConfigurationType" factoryName="Python">
+  <configuration default="false" name="DJ-Sync: Help" type="PythonConfigurationType" factoryName="Python">
     <module name="DJ-Database-Sync" />
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />

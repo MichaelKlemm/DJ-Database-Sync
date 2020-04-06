@@ -1,7 +1,6 @@
 import csv
 
 from djdbsync.utils.helper import Visitor, Visitable
-from djdbsync.tools.serato import SeratoCrateTrackInfo
 
 
 class FixedExcel(csv.Dialect):
@@ -39,6 +38,7 @@ class PlaylistWriterVisitor(Visitor):
         self.writer = writer
 
     def accept(self, obj: Visitable):
+        from djdbsync.tools.serato import SeratoCrateTrackInfo
         if isinstance(obj, SeratoCrateTrackInfo):
             self.writer.append_track(obj.path)
 
@@ -49,6 +49,7 @@ class DatabaseCsvWriterVisitor(Visitor):
         self.writer = writer
 
     def accept(self, obj: Visitable):
+        from djdbsync.tools.serato import SeratoCrateTrackInfo
         if isinstance(obj, SeratoCrateTrackInfo):
             self.writer.append_track(path=obj.path, **obj.data)
 

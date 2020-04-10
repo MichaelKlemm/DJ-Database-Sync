@@ -92,9 +92,8 @@ class ActionRegistry(metaclass=SingletonMetaclass):
 def _parse_docstring(docstring: str) -> Tuple[str, str]:
     parts = docstring.split("\n\n")
     parts = [re.sub(r"\s+", " ", i) for i in parts]
-    if len(parts) == 0:
-        return "", ""
     if len(parts) == 1:
         return parts[0], ""
     if len(parts) >= 2:
         return parts[0], parts[1]
+    return "", ""

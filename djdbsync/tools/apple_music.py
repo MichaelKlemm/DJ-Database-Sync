@@ -1,7 +1,9 @@
 import csv
 import plistlib
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from urllib.parse import unquote, urlparse
+
+from fuzzywuzzy import fuzz
 
 from djdbsync.utils.actions import ActionRegistry
 
@@ -65,93 +67,83 @@ class AppleMusicDatabase:
         "Work",
     ]
 
-    class RaiseOnDataNotLoaded:
+    class EnsureLoaded:
+        def __call__(self, func):
+            def _wrapper(func_self: 'AppleMusicDatabase', *args, **kwargs):
+                if not AppleMusicDatabase.is_loaded.__get__(func_self, AppleMusicDatabase)():
+                    AppleMusicDatabase.load.__get__(func_self, AppleMusicDatabase)()
+                return func.__get__(func_self)(*args, **kwargs)
+            return _wrapper
 
-        def __init__(self, func: callable):
-            self.func = func
+    def __init__(self, db_file: str):
+        self.db_file = db_file
+        self.data: Dict[str, object] = None
 
-        def __call__(self, obj: 'AppleMusicDatabase', *args, **kwargs):
-            if not obj.data:
-                raise LookupError("Apple DB requires to be loaded first. Use load()")
-            return self.func.__get__(obj)(*args, **kwargs)
-
-    def __init__(self, dbfile: str):
-        self.dbfile = dbfile
-        self.data = None
+    def is_loaded(self) -> bool:
+        return self.data is not None
 
     def load(self):
-        if self.data:
+        if self.is_loaded():
             raise RuntimeError("Apple DB loaded twice")
-        with open(self.dbfile, 'r+b') as file:
+        with open(self.db_file, 'rb') as file:
             self.data = plistlib.load(file)
 
-    @RaiseOnDataNotLoaded
+    @EnsureLoaded()
     def get_db_header(self) -> Dict[str, object]:
         return {key: self.data[key] for key in self.data if key in AppleMusicDatabase.APPLE_MUSIC_DB_HEADERS}
 
-    @RaiseOnDataNotLoaded
+    @EnsureLoaded()
     def get_db_tracks(self) -> Dict[str, Dict[str, object]]:
         return self.data.get("Tracks", {})
 
-    @RaiseOnDataNotLoaded
+    @EnsureLoaded()
     def get_db_playlists(self) -> List[Dict[str, object]]:
         return self.data.get("Playlists", [])
 
     def __repr__(self):
-        hdr = self.get_db_header()
-        return "Database {} (Date {} / APP-Version {} / DB-Version: {} / {} Tracks / {} Playlists)".format(
-            hdr.get("Music Folder", "unknown"),
-            hdr.get("Date", "unknown"),
-            hdr.get("Application Version", "unknows"),
-            "{}.{}".format(hdr.get("Major Version", 0), hdr.get("Minor Version", 0)),
-            len(self.get_db_tracks()),
-            len(self.get_db_playlists()),
-        )
+        if self.is_loaded():
+            hdr = self.get_db_header()
+            return "Database {} (Date {} / APP-Version {} / DB-Version: {} / {} Tracks / {} Playlists)".format(
+                hdr.get("Music Folder", "unknown"),
+                hdr.get("Date", "unknown"),
+                hdr.get("Application Version", "unknows"),
+                "{}.{}".format(hdr.get("Major Version", 0), hdr.get("Minor Version", 0)),
+                len(self.get_db_tracks()),
+                len(self.get_db_playlists()),
+            )
+        return ""
 
     def get_db_track_locations(self) -> Dict[int, str]:
         return {
-            i: unquote(urlparse(j["Location"]).path)
+            int(i): unquote(urlparse(j["Location"]).path)
             for i, j in self.get_db_tracks().items()
             if "Location" in j
         }
 
-    def get_all_playlists(self):
-        return {i["Name"]: list(j["Track ID"] for j in i["Playlist Items"]) for i in self.get_all_playlists()}
+    def get_all_playlists(self) -> Dict[str, List[int]]:
+        return {i["Name"]: list(int(j["Track ID"]) for j in i["Playlist Items"]) for i in self.get_db_playlists()}
 
-    @ActionRegistry.register_command('export-itunes')
-    def export_database(self, export_target: str = "print"):  # "apple-db.csv"):
-        self.load()
+    def export_database(self, export_target: str = "print"):
         if export_target == "print":
             print("\n".join([repr(i) for i in self.data.get("Tracks", {}).values()]))
         elif export_target.lower().endswith(".csv"):
             with open(export_target, 'w+') as file:
                 out = csv.DictWriter(file, AppleMusicDatabase.APPLE_MUSIC_DB_COLUMNS)
-                for track in self.data.get("Tracks", {}).values():
+                for track in self.get_db_tracks().values():
                     out.writerow(track)
 
-    @staticmethod
-    def _string_match(str1: str, str2: str) -> int:
-        if str1 == str2:
-            return 100
-        str1 = str1.lower()
-        str2 = str2.lower()
-        if str1 == str2:
-            return 95
-        if str1.startswith(str2) or str2.startswith(str1):
-            return 90
-        words = str1.split(' ')
-        result = 0
-        for i in words:
-            if i in str2:
-                result += 1
-        return result * (90 / len(words))
+    @ActionRegistry.register_command('export-itunes')
+    def export_database_cmd(self, export_target: str = "print"):
+        self.export_database(export_target)
 
-    def find_track(self, artist: str, _title: str, accuracy: int = 70) -> List[int]:
-        results = []
-        self.load()
-        for track_id, track_info in self.data.get("Tracks", {}).items():
-            artist_match = AppleMusicDatabase._string_match(artist, track_info['Artist'])
-            title_match = AppleMusicDatabase._string_match(artist, track_info['Name'])
-            if (artist_match * title_match) > (accuracy * accuracy):
-                results.append(track_id)
-        return results
+    def find_track(self, artist: str, title: str, accuracy: int = 70, limit: int = 1) -> Dict[int, object]:
+        results: List[Tuple[int, int, object]] = list()
+        target_ratio = accuracy * accuracy
+        for track_id, track in self.get_db_tracks().items():
+            ratio = fuzz.partial_ratio(artist, track.get("Artist", ""))
+            ratio *= fuzz.partial_ratio(title, track.get("Name", ""))
+            if ratio >= target_ratio:
+                results.append(tuple((ratio, track_id, track)))
+
+        results_sorted = sorted(results, key=lambda i: (100*100) - i[0])
+        return {int(i[1]): i[2] for _, i in zip(range(limit), results_sorted)}

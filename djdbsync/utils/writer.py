@@ -38,6 +38,8 @@ class PlaylistWriterVisitor(Visitor):
         self.writer = writer
 
     def accept(self, obj: Visitable):
+        # Replace for forward declaration. Avoid cyclic dependency
+        # pylint: disable=import-outside-toplevel, cyclic-import
         from djdbsync.tools.serato import SeratoCrateTrackInfo
         if isinstance(obj, SeratoCrateTrackInfo):
             self.writer.append_track(obj.path)
@@ -49,6 +51,8 @@ class DatabaseCsvWriterVisitor(Visitor):
         self.writer = writer
 
     def accept(self, obj: Visitable):
+        # Replace for forward declaration. Avoid cyclic dependency
+        # pylint: disable=import-outside-toplevel, cyclic-import
         from djdbsync.tools.serato import SeratoCrateTrackInfo
         if isinstance(obj, SeratoCrateTrackInfo):
             self.writer.append_track(path=obj.path, **obj.data)

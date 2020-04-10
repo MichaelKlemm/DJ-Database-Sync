@@ -154,11 +154,11 @@ class DjMediaSyncController:
 
         i.add_argument(
             "--link-dir",
-           dest="serato_media_dir",
-           help="Directory to create the the linked media files at. This directory should not be a subdirectoy of a"
-                "folder the Apple Music application looks for songs at. If this directory does not exist, it will be"
-                "created. At this directory all songs from Apple Music will be stored by there database ID and linked"
-                "to the concrete file")
+            dest="serato_media_dir",
+            help="Directory to create the the linked media files at. This directory should not be a subdirectoy of a"
+                 "folder the Apple Music application looks for songs at. If this directory does not exist, it will be"
+                 "created. At this directory all songs from Apple Music will be stored by there database ID and linked"
+                 "to the concrete file")
 
         i.add_argument(
             "--crate",
@@ -213,6 +213,8 @@ class DjMediaSyncController:
         self.options = options
 
     def __launch_gui(self):
+        # Only load if really required / launching GUI
+        # pylint: disable=import-outside-toplevel
         from djdbsync.gui.main import MainApp
         self.application = MainApp()
         self.application.run()

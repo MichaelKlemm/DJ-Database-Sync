@@ -59,6 +59,7 @@ class SeratoSongStorageFs:
         else:
             os.symlink(path, filepath)
         self.serato_db[song_id] = filepath
+        return filepath
 
     def get_file(self, song_id):
         if song_id in self.serato_db:
@@ -489,4 +490,6 @@ class SeratoConfig:
                 serato_db.visit(csv)
 
     def get_smart_crates(self) -> Iterable[str]:
+        # Added for future development
+        # pylint: disable=no-self-use
         return []

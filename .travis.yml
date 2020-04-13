@@ -1,14 +1,27 @@
+os: linux
+dist: bionic
 language: python
 cache: pip
 matrix:
   include:
-    - python: 3.8
+# Kivy 1.11.1 does not support Py38 right now
+#    - python: 3.8
+#      env: TOXENV=unittests
     - python: 3.7
     - python: 3.6
-    - python: 3.5
+      env: TOXENV=unittests
+# The used syntax does not support py35 anymore (e.g. formated strings)
+#    - python: 3.5
+#      env: TOXENV=unittests
 install:
-  - pip install tox coveralls
+  - pip install \
+      tox==3.14.6 \
+      coveralls==2.0.0
 script:
   - tox
+notifications:
+  email:
+    on_success: never
+    on_failure: always
 after_success:
   - coveralls

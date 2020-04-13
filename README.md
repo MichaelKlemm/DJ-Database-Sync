@@ -4,6 +4,7 @@
 
 [![Build Status](https://travis-ci.org/MichaelKlemm/DJ-Database-Sync.svg?branch=master)](https://travis-ci.org/MichaelKlemm/DJ-Database-Sync)
 [![Documentation Status](https://readthedocs.org/projects/dj-database-sync/badge/?version=latest)](https://dj-database-sync.readthedocs.io/en/latest/?badge=latest)
+[![Coverage Status](https://coveralls.io/repos/github/MichaelKlemm/DJ-Database-Sync/badge.svg)](https://coveralls.io/github/MichaelKlemm/DJ-Database-Sync)
 
 ## Introduction
 

@@ -12,7 +12,7 @@ on:
 jobs:
   build:
     env:
-      working-directory: ${{ GITHUB_WORKSPACE }}
+      working-directory: /github/workspace
     runs-on: ubuntu-latest
     strategy:
       matrix:

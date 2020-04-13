@@ -12,7 +12,7 @@ on:
 jobs:
   build:
     env:
-      working-directory: /github/workspace
+      working-directory: /home/runner/work/DJ-Database-Sync/DJ-Database-Sync
     runs-on: ubuntu-latest
     strategy:
       matrix:

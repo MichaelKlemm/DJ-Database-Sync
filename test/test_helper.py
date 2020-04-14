@@ -15,6 +15,7 @@ class TestSingleton(unittest.TestCase):
         """
         A class using the singleton pattern can be initialized
         """
+
         class Test(metaclass=SingletonMetaclass):
             def __init__(self, a):
                 self.data = a
@@ -27,6 +28,7 @@ class TestSingleton(unittest.TestCase):
         """
         Instantiate a class twice will create two equal references to one object.
         """
+
         class Test(metaclass=SingletonMetaclass):
             def __init__(self):
                 self.data = None
@@ -39,6 +41,7 @@ class TestSingleton(unittest.TestCase):
         """
         Data stored by object using the singleton will not be overwritten by a second instantiation
         """
+
         class Test(metaclass=SingletonMetaclass):
             def __init__(self, data):
                 self.data = data
@@ -52,6 +55,7 @@ class TestSingleton(unittest.TestCase):
         """
         The singleton decorator can be used by different classes, each creating there own unique instance
         """
+
         class Test1(metaclass=SingletonMetaclass):
             def __init__(self, data):
                 self.data = data
@@ -69,9 +73,11 @@ class TestSingleton(unittest.TestCase):
         """
         A object method can be called
         """
+
         class Test(metaclass=SingletonMetaclass):
             def __init__(self, a, *args, **kwargs):
                 self.data = a
+
             def get_data(self):
                 return self.data
 
@@ -85,12 +91,15 @@ class TestSingleton(unittest.TestCase):
         """
         Class can have static and class methods
         """
+
         class Test(metaclass=SingletonMetaclass):
             def __init__(self, a):
                 assert False
+
             @staticmethod
             def static_method():
                 return "static"
+
             @classmethod
             def class_method(cls):
                 return "class"

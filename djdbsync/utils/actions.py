@@ -14,36 +14,63 @@ class ActionRegistry(metaclass=SingletonMetaclass):
         self.unbound_methods: Dict[str, Dict[str, Callable]] = {}
 
     @staticmethod
-    def _get_object_identifier(obj: Callable) -> str:
+    def get_baseclass_identifier(obj: Callable) -> str:
+        i = ""
+        if inspect.isfunction(obj) or inspect.ismethod(obj):
+            i = '.'.join([obj.__module__, obj.__qualname__.rsplit('.', 1)[0]])
+        elif inspect.isclass(obj):
+            i = repr(obj).split("'")[1]
+        else: # isobject
+            i = repr(obj.__class__).split("'")[1]
+        return i
+
+    @staticmethod
+    def get_function_type(obj: callable) -> str:
+        if inspect.ismethod(obj):
+            if inspect.isclass(obj.__getattribute__("__self__")):
+                return 'classmethod'
+            return 'boundmethod'
         if inspect.isfunction(obj):
-            return obj.__qualname__.rsplit('.', 1)[0]
-        return obj.__class__.__name__
-
-    @staticmethod
-    def _is_methodreference(ptr: callable) -> bool:
-        if inspect.ismethod(ptr) or inspect.ismethoddescriptor(ptr):
-            return True
-        if inspect.isfunction(ptr):
-            spec = inspect.getfullargspec(ptr)
+            # staticfunction or unbound membermethod
+            spec = inspect.getfullargspec(obj)
             if len(spec.args) > 0 and spec.args[0] == 'self':
-                return True
-        return False
+                return 'unboundmethod'
+            return 'staticfunction'
+        return 'none'
 
     @staticmethod
-    def register_command(name: str = None) -> MethodType:
+    def _parse_docstring(func: Callable) -> Tuple[str, str]:
+        if not hasattr(func, "__doc__") or not func.__doc__:
+            return None, None
+        parts = func.__doc__.split("\n\n")
+        parts = [re.sub(r"\s+", " ", i) for i in parts]
+        if len(parts) == 1:
+            return parts[0].strip(), ""
+        if len(parts) >= 2:
+            return parts[0].strip(), parts[1].strip()
+        return "", ""
+
+    @staticmethod
+    def register_command(name: str = None, bind_to_cls: bool = False) -> MethodType:
         def _register_command_impl(self: ActionRegistry, func: Callable, name_impl: str = name):
+            if not hasattr(func, "__name__") and not hasattr(func, "__qualname__"):
+                raise LookupError("Incompatible function {} / not a bare function.".format(repr(func)))
             if not name_impl:
                 name_impl = func.__name__
             if name_impl in self.description:
                 raise FileExistsError(f"Command {name_impl} already registered")
-            self.description[name_impl] = _parse_docstring(func.__doc__) if func.__doc__ else (None, None)
-            if ActionRegistry._is_methodreference(func):
-                cls_id = ActionRegistry._get_object_identifier(func)
+            self.description[name_impl] = ActionRegistry._parse_docstring(func)
+            func_type = ActionRegistry.get_function_type(func)
+            if func_type in ('unboundmethod', 'boundmethod'):
+                cls_id = ActionRegistry.get_baseclass_identifier(func)
                 if cls_id not in self.unbound_methods:
                     self.unbound_methods[cls_id] = {}
                 self.unbound_methods[cls_id][name_impl] = func
-            else:
-                self.actions[name_impl].append(func)
+            elif func_type in ('staticfunction', 'classmethod'):
+                if bind_to_cls:
+                    cls_id = ActionRegistry.get_baseclass_identifier(func)
+                    func = func.__get__(cls_id)
+                self.actions[name_impl] = [func]
 
             def _wrapper():
                 raise NotImplementedError("Method not callable directly! This method is used as action only!")
@@ -55,7 +82,7 @@ class ActionRegistry(metaclass=SingletonMetaclass):
         return _register_command_impl.__get__(ActionRegistry(), ActionRegistry)
 
     def register_object(self, obj: object):
-        name = ActionRegistry._get_object_identifier(obj)
+        name = ActionRegistry.get_baseclass_identifier(obj)
         for action_name, unbound_method in self.unbound_methods.get(name, {}).items():
             if hasattr(unbound_method, '__get__'):
                 if action_name in self.actions:
@@ -73,7 +100,7 @@ class ActionRegistry(metaclass=SingletonMetaclass):
         for action in self.actions.get(name, []):
             i = inspect.getfullargspec(action)
             args = i.args
-            if len(args) > 0 and args[0] == 'self':
+            if len(args) > 0 and args[0] in ('self', 'cls'):
                 args.pop(0)
             return i.args, (len(i.defaults) if i.defaults else 0)
         return [], 0
@@ -84,16 +111,7 @@ class ActionRegistry(metaclass=SingletonMetaclass):
                 action(*args, **kwargs)
             # pylint: disable=broad-except
             except Exception as err:
-                print("While running the action '{}' the following error occurred:".format(name))
-                print(repr(err))
-                print("The action is represented by function/method '{}'".format(action.__qualname__))
-
-
-def _parse_docstring(docstring: str) -> Tuple[str, str]:
-    parts = docstring.split("\n\n")
-    parts = [re.sub(r"\s+", " ", i) for i in parts]
-    if len(parts) == 1:
-        return parts[0], ""
-    if len(parts) >= 2:
-        return parts[0], parts[1]
-    return "", ""
+                raise RuntimeError(
+                    "While running the action '{}' the following error occurred:\n"
+                    "{}\n"
+                    "The action is represented by function/method '{}'".format(name, repr(err), action.__qualname__))

@@ -1,6 +1,7 @@
 import unittest
+from unittest import TestCase
 
-from djdbsync.utils.helper import SingletonMetaclass
+from djdbsync.utils.helper import SingletonMetaclass, Visitor, Visitable
 
 
 class TestSingleton(unittest.TestCase):
@@ -106,6 +107,80 @@ class TestSingleton(unittest.TestCase):
 
         assert Test.static_method() == "static"
         assert Test.class_method() == "class"
+
+    def test_resetObject(self):
+        """
+        An object should be able to be deleted, so the singleton could be used in other unit tests
+        """
+        class AClass(metaclass=SingletonMetaclass):
+            init_called = 0
+            del_called = 0
+
+            def __init__(s):
+                AClass.init_called += 1
+                super(AClass, s).__init__()
+            def __del__(s):
+                AClass.del_called += 1
+
+        a = AClass()
+        b = AClass()
+        a_str = repr(a)
+
+        self.assertEqual(a, b)
+
+        del a
+        del b
+
+        self.assertEqual(AClass.init_called, 1)
+        self.assertEqual(AClass.del_called, 0)
+
+        AClass.reset(AClass)
+        self.assertEqual(AClass.del_called, 1)
+
+        c = AClass()
+        d = AClass()
+        self.assertEqual(AClass.init_called, 2)
+        self.assertEqual(c, d)
+
+        # FIXME: Sometimes failes on DBG mode. Object recreated on same address?
+        #self.assertNotEqual(a_str, repr(c))
+
+
+class TestVisitor(TestCase):
+
+    def __init__(self, *args, **kwargs):
+        super(TestVisitor, self).__init__(*args, **kwargs)
+
+    def setUp(self) -> None:
+        super(TestVisitor, self).setUp()
+
+    def tearDown(self) -> None:
+        super(TestVisitor, self).tearDown()
+
+    def test_visitor(self):
+
+        class VisitorImpl(Visitor):
+
+            def __init__(self):
+                self.accepted_objects = []
+                super(VisitorImpl, self).__init__()
+
+            def accept(self, obj):
+                self.accepted_objects.append(obj)
+
+        class VisitableImpl(Visitable):
+
+            def __init__(self):
+                super(VisitableImpl, self).__init__()
+
+            def visit(self, obj: Visitor):
+                obj.accept(self)
+
+        a = VisitorImpl()
+        b = VisitableImpl()
+        b.visit(a)
+
+        self.assertListEqual(a.accepted_objects, [b])
 
 
 if __name__ == '__main__':
